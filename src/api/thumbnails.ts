@@ -4,6 +4,7 @@ import { getVideo, updateVideo } from "../db/videos";
 import type { ApiConfig } from "../config";
 import type { BunRequest } from "bun";
 import { BadRequestError, UserForbiddenError } from "./errors";
+import { getAssetDiskPath, getAssetURL, mediaTypeToExt } from "./assets";
 
 export async function handlerUploadThumbnail(cfg: ApiConfig, req: BunRequest) {
   const { videoId } = req.params as { videoId?: string };
@@ -17,6 +18,15 @@ export async function handlerUploadThumbnail(cfg: ApiConfig, req: BunRequest) {
   console.log("uploading thumbnail for video", videoId, "by user", userID);
 
   // TODO: implement the upload here
+
+  const video = getVideo(cfg.db, videoId);
+
+  if (!video) {
+    throw new UserForbiddenError(
+      `User (ID ${userID}) is not authorized to edit video (ID ${videoId})`,
+    );
+  }
+
   const formData = await req.formData();
   const file = formData.get("thumbnail");
   if (!(file instanceof File)) {
@@ -32,21 +42,15 @@ export async function handlerUploadThumbnail(cfg: ApiConfig, req: BunRequest) {
   }
 
   const mediaType = file.type;
-  const arrayBuffer = await file.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
-  const base64BufferString = buffer.toString("base64");
+  const ext = mediaTypeToExt(mediaType); //.png
+  const fileName = `${videoId}${ext}`;
 
-  const dataUrl = `data:${mediaType};base64,${base64BufferString}`;
+  const assetDiskPath = getAssetDiskPath(cfg, fileName);
+  await Bun.write(assetDiskPath, file);
 
-  const video = getVideo(cfg.db, videoId);
+  const urlPath = getAssetURL(cfg, fileName);
 
-  if (!video) {
-    throw new UserForbiddenError(
-      `User (ID ${userID}) is not authorized to edit video (ID ${videoId})`,
-    );
-  }
-
-  video.thumbnailURL = dataUrl;
+  video.thumbnailURL = urlPath;
 
   updateVideo(cfg.db, video);
 
