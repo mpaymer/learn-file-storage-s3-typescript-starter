@@ -3,7 +3,7 @@ import { respondWithJSON } from "./json";
 import { getVideo, updateVideo } from "../db/videos";
 import type { ApiConfig } from "../config";
 import type { BunRequest } from "bun";
-import { BadRequestError, UserForbiddenError } from "./errors";
+import { BadRequestError, NotFoundError, UserForbiddenError } from "./errors";
 import { getAssetDiskPath, getAssetURL, mediaTypeToExt } from "./assets";
 import { randomBytes } from "crypto";
 
@@ -23,9 +23,11 @@ export async function handlerUploadThumbnail(cfg: ApiConfig, req: BunRequest) {
   const video = getVideo(cfg.db, videoId);
 
   if (!video) {
-    throw new UserForbiddenError(
-      `User (ID ${userID}) is not authorized to edit video (ID ${videoId})`,
-    );
+    throw new NotFoundError("Couldn't find video");
+  }
+
+  if (video.userID !== userID) {
+    throw new UserForbiddenError("Not authorized to upload thumbnail");
   }
 
   const formData = await req.formData();
