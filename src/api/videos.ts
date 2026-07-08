@@ -8,6 +8,7 @@ import { getVideo, updateVideo } from "../db/videos";
 import path from "path";
 import { uploadVideoToS3 } from "../s3";
 import { rm } from "fs/promises";
+import { getVideoAspectRatio } from "../video-meta-helper";
 
 export async function handlerUploadVideo(cfg: ApiConfig, req: BunRequest) {
   const MAX_UPLOAD_SIZE = 1 << 30; //1 GB
@@ -54,9 +55,12 @@ export async function handlerUploadVideo(cfg: ApiConfig, req: BunRequest) {
   const tempFilePath = path.join("/tmp", `${videoId}.mp4`);
   await Bun.write(tempFilePath, file);
 
+  // get aspect ratio and append to file as prefix
+  const aspectRatioPrefix = await getVideoAspectRatio(tempFilePath);
+
   // put the object into S3
   // use the s3 client we created in the config object
-  let s3FileKey = `${videoId}.mp4`;
+  let s3FileKey = `${aspectRatioPrefix}/${videoId}.mp4`;
   await uploadVideoToS3(cfg, s3FileKey, tempFilePath, mediaType);
 
   video.videoURL = `https://${cfg.s3Bucket}.s3.${cfg.s3Region}.amazonaws.com/${s3FileKey}`;
